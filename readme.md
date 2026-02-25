@@ -16,7 +16,13 @@ Zero dependencies. Fully documented. Works great for building DMG installers wit
 
 ## Install
 
-Add `https://github.com/sindresorhus/DSStore` in the ["Swift Package Manager" tab in Xcode](https://developer.apple.com/documentation/xcode/adding_package_dependencies_to_your_app).
+Add the following to `Package.swift`:
+
+```swift
+.package(url: "https://github.com/sindresorhus/DSStore", from: "0.1.0")
+```
+
+[Or add the package in Xcode.](https://developer.apple.com/documentation/xcode/adding_package_dependencies_to_your_app)
 
 ## Usage
 
