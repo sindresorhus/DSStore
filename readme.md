@@ -96,9 +96,7 @@ store.removeRecords(for: "OldFile.txt")
 
 ## API
 
-See the source for now.
-
-<!-- [See the API docs.](https://swiftpackageindex.com/sindresorhus/DSStore/documentation/dsstore) -->
+[See the API docs.](https://swiftpackageindex.com/sindresorhus/DSStore/documentation/dsstore/dsstore)
 
 ## FAQ
 
@@ -121,3 +119,7 @@ The parsing and writing work anywhere Swift runs, but `.DS_Store` files are only
 #### Can I use this to clean up `.DS_Store` files?
 
 Yes! You can read a file, inspect its contents, remove entries, and write it back. Or just delete the file entirely — Finder will recreate it.
+
+#### Why did you make this?
+
+I just wanted to work around an [old macOS bug](https://x.com/sindresorhus/status/2026670099781005485).
