@@ -333,6 +333,17 @@ struct DSStoreConvenienceTests {
 		#expect(loadedSettings?.viewStyle == settings.viewStyle)
 	}
 
+	@Test("Window settings preserve Finder visibility values")
+	func windowSettingsPreserveFinderVisibilityValues() throws {
+		let plistValue = PlistValue.dictionary([
+			"ContainerShowSidebar": .bool(false),
+			"ShowTabView": .bool(true)
+		])
+		let settings = try #require(DSStore.WindowSettings(plistValue: plistValue))
+
+		#expect(settings.plistValue == plistValue)
+	}
+
 	@Test("Icon view settings helpers")
 	func iconViewSettingsHelpers() {
 		var store = DSStore()

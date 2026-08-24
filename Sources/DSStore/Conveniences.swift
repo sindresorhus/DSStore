@@ -292,9 +292,19 @@ extension DSStore {
 		public var sidebarWidth: Double?
 
 		/**
+		Whether Finder shows the container sidebar.
+		*/
+		public var containerShowSidebar: Bool?
+
+		/**
 		Whether Finder shows the sidebar.
 		*/
 		public var showSidebar: Bool?
+
+		/**
+		Whether Finder shows the tab view.
+		*/
+		public var showTabView: Bool?
 
 		/**
 		Whether Finder shows the toolbar.
@@ -332,7 +342,9 @@ extension DSStore {
 		public init(
 			windowBounds: String? = nil,
 			sidebarWidth: Double? = nil,
+			containerShowSidebar: Bool? = nil,
 			showSidebar: Bool? = nil,
+			showTabView: Bool? = nil,
 			showToolbar: Bool? = nil,
 			showStatusBar: Bool? = nil,
 			showPathBar: Bool? = nil,
@@ -342,7 +354,9 @@ extension DSStore {
 		) {
 			self.windowBounds = windowBounds
 			self.sidebarWidth = sidebarWidth
+			self.containerShowSidebar = containerShowSidebar
 			self.showSidebar = showSidebar
+			self.showTabView = showTabView
 			self.showToolbar = showToolbar
 			self.showStatusBar = showStatusBar
 			self.showPathBar = showPathBar
@@ -361,7 +375,9 @@ extension DSStore {
 
 			self.windowBounds = dictionary["WindowBounds"]?.stringValue
 			self.sidebarWidth = dictionary["SidebarWidth"]?.doubleValue
+			self.containerShowSidebar = dictionary["ContainerShowSidebar"]?.booleanValue
 			self.showSidebar = dictionary["ShowSidebar"]?.booleanValue
+			self.showTabView = dictionary["ShowTabView"]?.booleanValue
 			self.showToolbar = dictionary["ShowToolbar"]?.booleanValue
 			self.showStatusBar = dictionary["ShowStatusBar"]?.booleanValue
 			self.showPathBar = dictionary["ShowPathbar"]?.booleanValue
@@ -382,8 +398,14 @@ extension DSStore {
 			if let sidebarWidth {
 				dictionary["SidebarWidth"] = .double(sidebarWidth)
 			}
+			if let containerShowSidebar {
+				dictionary["ContainerShowSidebar"] = .bool(containerShowSidebar)
+			}
 			if let showSidebar {
 				dictionary["ShowSidebar"] = .bool(showSidebar)
+			}
+			if let showTabView {
+				dictionary["ShowTabView"] = .bool(showTabView)
 			}
 			if let showToolbar {
 				dictionary["ShowToolbar"] = .bool(showToolbar)
