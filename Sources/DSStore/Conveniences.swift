@@ -610,11 +610,11 @@ extension DSStore {
 			}
 
 			if let textSize {
-				dictionary["textSize"] = .int(textSize)
+				dictionary["textSize"] = .double(Double(textSize))
 			}
 
 			if let iconSize {
-				dictionary["iconSize"] = .int(iconSize)
+				dictionary["iconSize"] = .double(Double(iconSize))
 			}
 
 			if let gridSpacing {
@@ -779,11 +779,11 @@ extension DSStore {
 			}
 
 			if let textSize {
-				dictionary["textSize"] = .int(textSize)
+				dictionary["textSize"] = .double(Double(textSize))
 			}
 
 			if let iconSize {
-				dictionary["iconSize"] = .int(iconSize)
+				dictionary["iconSize"] = .double(Double(iconSize))
 			}
 
 			if let viewOptionsVersion {

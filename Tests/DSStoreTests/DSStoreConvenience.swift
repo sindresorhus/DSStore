@@ -358,6 +358,14 @@ struct DSStoreConvenienceTests {
 		#expect(loadedSettings?.gridOffsetX == settings.gridOffsetX)
 		#expect(loadedSettings?.iconSize == settings.iconSize)
 		#expect(loadedSettings?.arrangeBy == settings.arrangeBy)
+
+		guard case .dictionary(let dictionary) = settings.plistValue else {
+			Issue.record("Expected dictionary")
+			return
+		}
+
+		#expect(dictionary["textSize"] == .double(12))
+		#expect(dictionary["iconSize"] == .double(64))
 	}
 
 	@Test("List view settings helpers")
@@ -382,6 +390,14 @@ struct DSStoreConvenienceTests {
 		#expect(loadedSettings?.sortColumn == settings.sortColumn)
 		#expect(loadedSettings?.textSize == settings.textSize)
 		#expect(loadedSettings?.columns == settings.columns)
+
+		guard case .dictionary(let dictionary) = settings.plistValue else {
+			Issue.record("Expected dictionary")
+			return
+		}
+
+		#expect(dictionary["textSize"] == .double(11))
+		#expect(dictionary["iconSize"] == .double(32))
 	}
 
 	@Test("Batch icon positions")
