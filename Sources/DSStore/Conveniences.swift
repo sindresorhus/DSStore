@@ -513,7 +513,7 @@ extension DSStore {
 		public var arrangeBy: String?
 
 		/**
-		Background mode identifier.
+		Background mode identifier: `0` is the default background, `1` is a solid color, and `2` is a picture.
 		*/
 		public var backgroundType: Int?
 
@@ -531,6 +531,11 @@ extension DSStore {
 		Background color blue channel.
 		*/
 		public var backgroundColorBlue: Double?
+
+		/**
+		Carbon Alias data for the background picture. Finder reads the picture from here when `backgroundType` is `2`.
+		*/
+		public var backgroundImageAlias: Data?
 
 		/**
 		Creates icon view settings.
@@ -551,7 +556,8 @@ extension DSStore {
 			backgroundType: Int? = nil,
 			backgroundColorRed: Double? = nil,
 			backgroundColorGreen: Double? = nil,
-			backgroundColorBlue: Double? = nil
+			backgroundColorBlue: Double? = nil,
+			backgroundImageAlias: Data? = nil
 		) {
 			self.showIconPreview = showIconPreview
 			self.showItemInfo = showItemInfo
@@ -569,6 +575,7 @@ extension DSStore {
 			self.backgroundColorRed = backgroundColorRed
 			self.backgroundColorGreen = backgroundColorGreen
 			self.backgroundColorBlue = backgroundColorBlue
+			self.backgroundImageAlias = backgroundImageAlias
 		}
 
 		/**
@@ -595,14 +602,15 @@ extension DSStore {
 			self.backgroundColorRed = dictionary["backgroundColorRed"]?.doubleValue
 			self.backgroundColorGreen = dictionary["backgroundColorGreen"]?.doubleValue
 			self.backgroundColorBlue = dictionary["backgroundColorBlue"]?.doubleValue
+			self.backgroundImageAlias = dictionary["backgroundImageAlias"]?.dataValue
 		}
 
 		/**
 		Plist representation for the `icvp` record.
 		*/
 		public var plistValue: PlistValue {
-			// Finder discards the whole dictionary when keys are missing, so every key is always written. Unset ones fall back to the value Finder itself uses.
-			.dictionary([
+			// Finder discards the whole dictionary when keys are missing, so every key is always written. Unset ones fall back to the value Finder itself uses. `backgroundImageAlias` is the exception: Finder omits it unless the background is a picture.
+			var dictionary: [String: PlistValue] = [
 				"showIconPreview": .bool(showIconPreview ?? true),
 				"showItemInfo": .bool(showItemInfo ?? false),
 				"labelOnBottom": .bool(labelOnBottom ?? true),
@@ -619,7 +627,13 @@ extension DSStore {
 				"backgroundColorRed": .double(backgroundColorRed ?? 1),
 				"backgroundColorGreen": .double(backgroundColorGreen ?? 1),
 				"backgroundColorBlue": .double(backgroundColorBlue ?? 1)
-			])
+			]
+
+			if let backgroundImageAlias {
+				dictionary["backgroundImageAlias"] = .data(backgroundImageAlias)
+			}
+
+			return .dictionary(dictionary)
 		}
 	}
 	// swiftlint:enable discouraged_optional_boolean
@@ -960,47 +974,6 @@ extension DSStore {
 		record(for: filename, type: .iconLocation)?.iconPosition
 	}
 
-	// MARK: - Background Helpers
-
-	/**
-	Background type for a folder.
-	*/
-	public enum BackgroundType: Hashable, Sendable {
-		case `default`
-		case color(red: UInt16, green: UInt16, blue: UInt16)
-		case picture
-	}
-
-	/**
-	Set background type for the folder.
-	*/
-	public mutating func setBackground(_ type: BackgroundType) {
-		var blobData = Data()
-
-		switch type {
-		case .default:
-			blobData.append(contentsOf: Array("DefB".utf8))
-			blobData.append(contentsOf: [UInt8](repeating: 0, count: 8))
-		case .color(let red, let green, let blue):
-			blobData.append(contentsOf: Array("ClrB".utf8))
-			var redBigEndian = red.bigEndian
-			var greenBigEndian = green.bigEndian
-			var blueBigEndian = blue.bigEndian
-			blobData.append(contentsOf: withUnsafeBytes(of: &redBigEndian) { $0 })
-			blobData.append(contentsOf: withUnsafeBytes(of: &greenBigEndian) { $0 })
-			blobData.append(contentsOf: withUnsafeBytes(of: &blueBigEndian) { $0 })
-			blobData.append(contentsOf: [0x00, 0x00])
-		case .picture:
-			blobData.append(contentsOf: Array("PctB".utf8))
-
-			// Length of pict record would go here.
-			blobData.append(contentsOf: [UInt8](repeating: 0, count: 8))
-		}
-
-		let record = Record(filename: ".", type: .background, value: .data(blobData))
-		add(record)
-	}
-
 	// MARK: - Window Settings Helpers
 
 	/**
@@ -1063,44 +1036,118 @@ extension DSStore {
 		add(record)
 	}
 
+	// MARK: - Background Helpers
+
+	/**
+	Background type for a folder, stored in the `icvp` record.
+	*/
+	public enum BackgroundType: Hashable, Sendable {
+		/**
+		Finder's default white background.
+		*/
+		case `default`
+
+		/**
+		Solid background color, with each channel in the `0...1` range.
+		*/
+		case color(red: Double, green: Double, blue: Double)
+
+		/**
+		Background picture, with the alias data that points Finder at the image.
+		*/
+		case picture(aliasData: Data)
+	}
+
 	/**
 	Read the background settings for the folder.
 	*/
 	public func background() -> BackgroundType? {
-		record(for: ".", type: .background)?.backgroundType
-	}
-
-	/**
-	Read the background picture alias data if present.
-	*/
-	public func backgroundPictureAliasData() -> Data? {
 		guard
-			let record = record(for: ".", type: .backgroundPicture),
-			case .data(let data) = record.value
+			let settings = iconViewSettings(),
+			let backgroundType = settings.backgroundType
 		else {
 			return nil
 		}
 
-		return data
+		switch backgroundType {
+		case 0:
+			return .default
+		case 1:
+			return .color(
+				red: settings.backgroundColorRed ?? 1,
+				green: settings.backgroundColorGreen ?? 1,
+				blue: settings.backgroundColorBlue ?? 1
+			)
+		case 2:
+			guard let aliasData = settings.backgroundImageAlias else {
+				return nil
+			}
+
+			return .picture(aliasData: aliasData)
+		default:
+			return nil
+		}
+	}
+
+	/**
+	Set the background of the folder.
+	*/
+	public mutating func setBackground(_ type: BackgroundType) {
+		switch type {
+		case .default:
+			updateIconViewSettings {
+				$0.backgroundType = 0
+				$0.backgroundImageAlias = nil
+			}
+		case .color(let red, let green, let blue):
+			updateIconViewSettings {
+				$0.backgroundType = 1
+				$0.backgroundColorRed = red
+				$0.backgroundColorGreen = green
+				$0.backgroundColorBlue = blue
+				$0.backgroundImageAlias = nil
+			}
+		case .picture(let aliasData):
+			updateIconViewSettings {
+				$0.backgroundType = 2
+				$0.backgroundImageAlias = aliasData
+			}
+		}
 	}
 
 	/**
 	Set a background picture using Finder alias data.
-	The caller is responsible for providing valid alias data for the image file.
+
+	Finder reads the picture from `backgroundImageAlias` in the `icvp` record, and it only renders a Carbon Alias there. Bookmark data, including data from `URL.bookmarkData(options: .suitableForBookmarkFile, relativeTo:)`, is ignored. On macOS, use `setBackgroundPicture(imageURL:relativeTo:)` to create the alias data.
+
+	The image file must be on the volume that the store is on, and must still be there when Finder reads the store.
 	*/
-	public mutating func setBackgroundPicture(aliasData: Data) throws(Error) {
-		guard let aliasLength = UInt32(exactly: aliasData.count) else {
-			throw Error.writeFailed("Alias data is too large")
-		}
+	public mutating func setBackgroundPicture(aliasData: Data) {
+		setBackground(.picture(aliasData: aliasData))
+	}
 
-		var blobData = Data()
-		blobData.append(contentsOf: Array("PctB".utf8))
-		var aliasLengthBigEndian = aliasLength.bigEndian
-		blobData.append(contentsOf: withUnsafeBytes(of: &aliasLengthBigEndian) { $0 })
-		blobData.append(contentsOf: [UInt8](repeating: 0, count: 4))
+	#if os(macOS)
+	/**
+	Set a background picture from an image file.
 
-		add(Record(filename: ".", type: .background, value: .data(blobData)))
-		add(Record(filename: ".", type: .backgroundPicture, value: .data(aliasData)))
+	Creates the alias data that Finder needs to find the image. Pass the folder that the store describes as `relativeTo`, so the alias can be resolved relative to it.
+
+	Finder only resolves the alias when the image sits at this path on the volume that the store itself is on. Call this while that volume is mounted, and pass the image's path on the volume. An alias made against a build folder that the image later gets copied out of does not resolve.
+
+	This is only available on macOS, because it uses the Carbon Alias Manager. On other platforms, pass alias data to `setBackgroundPicture(aliasData:)`.
+	*/
+	public mutating func setBackgroundPicture(imageURL: URL, relativeTo baseURL: URL) throws(Error) {
+		setBackgroundPicture(aliasData: try carbonAliasData(forFileAt: imageURL, relativeTo: baseURL))
+	}
+	#endif
+
+	/**
+	Applies a change to the `icvp` record, keeping the keys that are already there.
+	*/
+	private mutating func updateIconViewSettings(_ update: (inout IconViewSettings) -> Void) {
+		var settings = iconViewSettings() ?? IconViewSettings()
+		update(&settings)
+		setIconViewSettings(settings)
 	}
 
 	/**
@@ -1229,6 +1276,14 @@ extension DSStore.PlistValue {
 	}
 	// swiftlint:enable discouraged_optional_boolean
 
+	fileprivate var dataValue: Data? {
+		guard case .data(let value) = self else {
+			return nil
+		}
+
+		return value
+	}
+
 	fileprivate var intValue: Int? {
 		switch self {
 		case .int(let value):
@@ -1267,3 +1322,65 @@ extension DSStore.PlistValue {
 		return result
 	}
 }
+
+#if os(macOS)
+/**
+Carbon Alias data for a file, which is the format Finder reads from `backgroundImageAlias`.
+*/
+private func carbonAliasData(forFileAt fileURL: URL, relativeTo baseURL: URL) throws(DSStore.Error) -> Data {
+	var handle: UnsafeMutableRawPointer?
+
+	// `FSNewAliasFromPath` still creates the alias when the target is missing, so the handle needs freeing on that path too.
+	defer {
+		if let handle {
+			carbonDisposeHandle(handle)
+		}
+	}
+
+	let status: Int32? = baseURL.withUnsafeFileSystemRepresentation { basePath in
+		fileURL.withUnsafeFileSystemRepresentation { filePath in
+			guard let filePath else {
+				return nil
+			}
+
+			return carbonNewAliasFromPath(basePath, filePath, 0, &handle, nil)
+		}
+	}
+
+	guard status == 0, let handle else {
+		throw DSStore.Error.writeFailed("Could not create alias data for \(fileURL.path(percentEncoded: false))")
+	}
+
+	guard let records = handle.load(as: UnsafeMutableRawPointer?.self) else {
+		throw DSStore.Error.writeFailed("Could not create alias data for \(fileURL.path(percentEncoded: false))")
+	}
+
+	return Data(bytes: records, count: carbonGetHandleSize(handle))
+}
+
+/**
+Carbon Alias Manager. Swift does not import these, so they are bound by name.
+
+`FSNewAliasFromPath` is deprecated since macOS 10.8, but it is the only way to make the alias records that Finder expects in `backgroundImageAlias`.
+*/
+@_silgen_name("FSNewAliasFromPath")
+private func carbonNewAliasFromPath(
+	_ fromFilePath: UnsafePointer<CChar>?,
+	_ targetPath: UnsafePointer<CChar>,
+	_ flags: UInt32,
+	_ inAlias: UnsafeMutablePointer<UnsafeMutableRawPointer?>?,
+	_ isDirectory: UnsafeMutablePointer<DarwinBoolean>?
+) -> Int32
+
+/**
+Size of a Carbon handle.
+*/
+@_silgen_name("GetHandleSize")
+private func carbonGetHandleSize(_ handle: UnsafeMutableRawPointer) -> Int
+
+/**
+Frees a Carbon handle and its records.
+*/
+@_silgen_name("DisposeHandle")
+private func carbonDisposeHandle(_ handle: UnsafeMutableRawPointer)
+#endif

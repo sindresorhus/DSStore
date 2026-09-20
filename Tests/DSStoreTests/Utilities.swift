@@ -53,7 +53,7 @@ enum TestHelpers {
 		try store.setIconPosition(for: "README.md", x: 300, y: 180)
 		try store.setWindowBounds(top: 100, left: 100, bottom: 400, right: 620)
 		store.setViewStyle(.iconView)
-		store.setBackground(.color(red: 65_535, green: 65_535, blue: 65_535))
+		store.setBackground(.color(red: 1, green: 1, blue: 1))
 		return store
 	}
 }

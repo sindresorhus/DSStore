@@ -22,7 +22,7 @@ struct DSStoreIntegrationTests {
 			store.setViewStyle(.iconView)
 
 			// Set a white background
-			store.setBackground(.color(red: 65_535, green: 65_535, blue: 65_535))
+			store.setBackground(.color(red: 1, green: 1, blue: 1))
 
 			// Write it out
 			try store.write(to: url)
@@ -37,9 +37,39 @@ struct DSStoreIntegrationTests {
 
 			#expect(loaded.record(for: ".", type: .finderWindowInfo) != nil)
 			#expect(loaded.record(for: ".", type: .viewStyle) != nil)
-			#expect(loaded.record(for: ".", type: .background) != nil)
+			#expect(loaded.record(for: ".", type: .iconViewProperties) != nil)
+			#expect(loaded.background() == .color(red: 1, green: 1, blue: 1))
 		}
 	}
+
+	#if os(macOS)
+	@Test("Background picture survives a disk round-trip")
+	func backgroundPictureRoundTrip() throws {
+		try TestHelpers.withTempDirectory { folder in
+			let imageURL = folder.appending(path: ".background.png")
+			try Data([0x89, 0x50, 0x4E, 0x47]).write(to: imageURL)
+
+			var store = DSStore()
+			store.setViewStyle(.iconView)
+			store.setIconViewSettings(DSStore.IconViewSettings(textSize: 16, iconSize: 100))
+			try store.setBackgroundPicture(imageURL: imageURL, relativeTo: folder)
+			try store.write(to: folder.appending(path: ".DS_Store"))
+
+			let loaded = try DSStore.read(from: folder.appending(path: ".DS_Store"))
+
+			guard case .picture(let aliasData) = loaded.background() else {
+				Issue.record("Expected picture background")
+				return
+			}
+
+			#expect(aliasData.prefix(2) == Data([0x00, 0x00]))
+
+			// The other icon view keys have to survive too, or Finder discards the whole dictionary.
+			#expect(loaded.iconViewSettings()?.iconSize == 100)
+			#expect(loaded.iconViewSettings()?.textSize == 16)
+		}
+	}
+	#endif
 
 	@Test("Modify existing store")
 	func modifyExistingStore() throws {

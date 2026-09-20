@@ -70,7 +70,6 @@ struct FourCCTests {
 	@Test("Common type constants")
 	func commonTypeConstants() {
 		#expect(DSStore.RecordType.iconLocation.fourCC.stringValue == "Iloc")
-		#expect(DSStore.RecordType.background.fourCC.stringValue == "BKGD")
 		#expect(DSStore.RecordType.finderWindowInfo.fourCC.stringValue == "fwi0")
 		#expect(DSStore.RecordType.viewStyle.fourCC.stringValue == "vstl")
 		#expect(DSStore.RecordType.iconViewOptions.fourCC.stringValue == "icvo")

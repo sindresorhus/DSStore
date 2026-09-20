@@ -64,59 +64,65 @@ struct DSStoreConvenienceTests {
 
 		store.setBackground(.default)
 
-		let record = store.record(for: ".", type: .background)
+		let record = store.record(for: ".", type: .iconViewProperties)
 		#expect(record != nil)
-
-		if case .data(let data) = record?.value {
-			#expect(data.count == 12)
-			// Check "DefB" magic
-			#expect(data[0] == 0x44) // D
-			#expect(data[1] == 0x65) // e
-			#expect(data[2] == 0x66) // f
-			#expect(data[3] == 0x42) // B
-		} else {
-			Issue.record("Expected blob value")
-		}
+		#expect(store.iconViewSettings()?.backgroundType == 0)
 	}
 
 	@Test("Set color background")
 	func setColorBackground() {
 		var store = DSStore()
 
-		store.setBackground(.color(red: 65_535, green: 32_768, blue: 0))
+		store.setBackground(.color(red: 1, green: 0.5, blue: 0))
 
-		let record = store.record(for: ".", type: .background)
-		#expect(record != nil)
-
-		if case .data(let data) = record?.value {
-			// Check "ClrB" magic
-			#expect(data[0] == 0x43) // C
-			#expect(data[1] == 0x6C) // l
-			#expect(data[2] == 0x72) // r
-			#expect(data[3] == 0x42) // B
-		} else {
-			Issue.record("Expected blob value")
-		}
+		#expect(store.iconViewSettings()?.backgroundType == 1)
+		#expect(store.iconViewSettings()?.backgroundColorRed == 1)
+		#expect(store.iconViewSettings()?.backgroundColorGreen == 0.5)
+		#expect(store.iconViewSettings()?.backgroundColorBlue == 0)
 	}
 
 	@Test("Set picture background")
 	func setPictureBackground() {
 		var store = DSStore()
+		let aliasData = Data([0x01, 0x02, 0x03, 0x04])
 
-		store.setBackground(.picture)
+		store.setBackground(.picture(aliasData: aliasData))
 
-		let record = store.record(for: ".", type: .background)
-		#expect(record != nil)
+		#expect(store.iconViewSettings()?.backgroundType == 2)
+		#expect(store.iconViewSettings()?.backgroundImageAlias == aliasData)
+		#expect(store.background() == .picture(aliasData: aliasData))
+	}
 
-		if case .data(let data) = record?.value {
-			// Check "PctB" magic
-			#expect(data[0] == 0x50) // P
-			#expect(data[1] == 0x63) // c
-			#expect(data[2] == 0x74) // t
-			#expect(data[3] == 0x42) // B
-		} else {
-			Issue.record("Expected blob value")
-		}
+	@Test("A picture background without alias data reads back as nothing")
+	func pictureBackgroundWithoutAliasData() {
+		var store = DSStore()
+
+		store.setIconViewSettings(DSStore.IconViewSettings(backgroundType: 2))
+
+		#expect(store.background() == nil)
+	}
+
+	@Test("A color background clears the picture alias")
+	func colorBackgroundClearsPictureAlias() {
+		var store = DSStore()
+
+		store.setBackgroundPicture(aliasData: Data([0x01, 0x02]))
+		store.setBackground(.color(red: 1, green: 1, blue: 1))
+
+		#expect(store.iconViewSettings()?.backgroundType == 1)
+		#expect(store.iconViewSettings()?.backgroundImageAlias == nil)
+	}
+
+	@Test("The icon view settings keep their other values")
+	func backgroundKeepsOtherIconViewSettings() {
+		var store = DSStore()
+
+		store.setIconViewSettings(DSStore.IconViewSettings(iconSize: 128))
+		store.setBackground(.color(red: 0, green: 0, blue: 1))
+
+		let settings = store.iconViewSettings()
+		#expect(settings?.iconSize == 128)
+		#expect(settings?.backgroundColorBlue == 1)
 	}
 
 	@Test("Set window bounds")
@@ -245,31 +251,79 @@ struct DSStoreConvenienceTests {
 	@Test("Background reader")
 	func backgroundReader() {
 		var store = DSStore()
-		store.setBackground(.color(red: 1000, green: 2000, blue: 3000))
+		store.setBackground(.color(red: 0.25, green: 0.5, blue: 0.75))
 
 		if case .color(let red, let green, let blue) = store.background() {
-			#expect(red == 1000)
-			#expect(green == 2000)
-			#expect(blue == 3000)
+			#expect(red == 0.25)
+			#expect(green == 0.5)
+			#expect(blue == 0.75)
 		} else {
 			Issue.record("Expected color background")
 		}
 	}
 
-	@Test("Background picture alias helpers")
-	func backgroundPictureAliasHelpers() throws {
+	@Test("Background picture alias helper")
+	func backgroundPictureAliasHelper() {
 		var store = DSStore()
 		let aliasData = Data([0x01, 0x02, 0x03, 0x04])
 
-		try store.setBackgroundPicture(aliasData: aliasData)
+		store.setBackgroundPicture(aliasData: aliasData)
 
-		if case .picture = store.background() {
-			// Expected
+		if case .picture(let resultAliasData) = store.background() {
+			#expect(resultAliasData == aliasData)
 		} else {
 			Issue.record("Expected picture background")
 		}
-		#expect(store.backgroundPictureAliasData() == aliasData)
 	}
+
+	@Test("A default background reads back as default")
+	func defaultBackgroundReader() {
+		var store = DSStore()
+		store.setBackground(.default)
+
+		if case .default = store.background() {
+			// Expected
+		} else {
+			Issue.record("Expected default background")
+		}
+	}
+
+	#if os(macOS)
+	@Test("Background picture from an image file")
+	func backgroundPictureFromImageFile() throws {
+		try TestHelpers.withTempDirectory { folder in
+			let imageURL = folder.appending(path: "background.png")
+			try Data([0x89, 0x50, 0x4E, 0x47]).write(to: imageURL)
+
+			var store = DSStore()
+			try store.setBackgroundPicture(imageURL: imageURL, relativeTo: folder)
+
+			#expect(store.iconViewSettings()?.backgroundType == 2)
+
+			guard case .picture(let aliasData) = store.background() else {
+				Issue.record("Expected picture background")
+				return
+			}
+
+			// A Carbon Alias record, not a bookmark. Finder only resolves the former.
+			// Layout: 4 zero bytes, the record size, then the version `00 02`.
+			#expect(!aliasData.starts(with: Data("book".utf8)))
+			#expect(aliasData.prefix(4) == Data([0x00, 0x00, 0x00, 0x00]))
+			#expect(aliasData.dropFirst(6).prefix(2) == Data([0x00, 0x02]))
+		}
+	}
+
+	@Test("A missing image file is an error")
+	func missingImageFileIsAnError() throws {
+		try TestHelpers.withTempDirectory { folder in
+			var store = DSStore()
+
+			#expect(throws: DSStore.Error.self) {
+				try store.setBackgroundPicture(imageURL: folder.appending(path: "missing.png"), relativeTo: folder)
+			}
+		}
+	}
+	#endif
 
 	@Test("Window bounds reader")
 	func windowBoundsReader() throws {

@@ -62,12 +62,48 @@ try store.setIconPosition(for: "Applications", x: 480, y: 180)
 try store.setWindowBounds(top: 100, left: 100, bottom: 400, right: 620)
 store.setViewStyle(.iconView)
 
-// Set a background color (RGB values 0-65535)
-store.setBackground(.color(red: 65535, green: 65535, blue: 65535))
+// Set a background color (each channel is 0-1)
+store.setBackground(.color(red: 1, green: 1, blue: 1))
 
 // Write to disk
 try store.write(to: url)
 ```
+
+### Setting a background picture
+
+Finder reads the picture from the `icvp` record, and the record has to point at the image with a Carbon Alias.
+
+```swift
+import DSStore
+
+// The folder the store describes, with the image already inside it
+let folder = URL(filePath: "/Volumes/MyApp")
+let image = folder.appending(path: ".background.png")
+
+var store = DSStore()
+try store.setBackgroundPicture(imageURL: image, relativeTo: folder)
+
+try store.write(to: folder.appending(path: ".DS_Store"))
+```
+
+> [!IMPORTANT]
+> The image has to be on the volume that the store itself is on, and that volume has to be mounted while you write the store. A Carbon Alias records the volume's identity, including its creation date and file IDs, so an alias made against a build folder, before the volume exists, does not resolve.
+
+So building a DMG takes two steps: make a writable scratch image, mount it, write the store into it, then convert it. This is the same flow `dmgbuild` and `create-dmg` use.
+
+```sh
+# Keep the image inside `src`, so it ends up inside the volume.
+hdiutil create -srcfolder ./src -format UDRW -volname MyApp scratch.dmg
+hdiutil attach scratch.dmg
+
+# Write the store to /Volumes/MyApp/.DS_Store here, the way the Swift
+# example above does, while the volume is mounted.
+
+hdiutil detach /Volumes/MyApp
+hdiutil convert scratch.dmg -format UDZO -o MyApp.dmg
+```
+
+If you already have Carbon Alias data for the image, use `setBackgroundPicture(aliasData:)` instead. Finder does not accept bookmark data there, not even data from `URL.bookmarkData(options: .suitableForBookmarkFile, relativeTo:)`.
 
 ### Working with records directly
 

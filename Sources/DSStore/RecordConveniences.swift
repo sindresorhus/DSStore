@@ -24,40 +24,6 @@ extension DSStore.Record {
 	}
 
 	/**
-	Background type for the directory, when the record is `background`.
-	*/
-	public var backgroundType: DSStore.BackgroundType? {
-		guard
-			type == .background,
-			case .data(let data) = value,
-			data.count >= 4
-		else {
-			return nil
-		}
-
-		let typeString = String(bytes: data.prefix(4), encoding: .ascii)
-		switch typeString {
-		case "DefB":
-			return .default
-		case "ClrB":
-			guard
-				data.count >= 10,
-				let red = data.readUInt16BE(at: 4),
-				let green = data.readUInt16BE(at: 6),
-				let blue = data.readUInt16BE(at: 8)
-			else {
-				return nil
-			}
-
-			return .color(red: red, green: green, blue: blue)
-		case "PctB":
-			return .picture
-		default:
-			return nil
-		}
-	}
-
-	/**
 	Finder window bounds when the record is `finderWindowInfo`.
 	*/
 	public var windowBounds: DSStore.WindowBounds? {

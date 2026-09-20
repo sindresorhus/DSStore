@@ -6,13 +6,6 @@ extension DSStore {
 	*/
 	public enum RecordType: Hashable, Sendable, CustomStringConvertible {
 		/**
-		Background of the Finder window (12-byte blob).
-
-		Raw type: `BKGD`.
-		*/
-		case background
-
-		/**
 		Icon view options flag (bool).
 
 		Raw type: `ICVO`.
@@ -237,13 +230,6 @@ extension DSStore {
 		case physicalSizeLegacy
 
 		/**
-		Background picture alias (variable blob).
-
-		Raw type: `pict`.
-		*/
-		case backgroundPicture
-
-		/**
 		Trash put back location (blob).
 
 		Raw type: `ptbL`.
@@ -284,8 +270,6 @@ extension DSStore {
 		*/
 		public init(fourCC: FourCC) {
 			self = switch fourCC {
-			case FourCC.literal("BKGD"):
-				.background
 			case FourCC.literal("ICVO"):
 				.iconViewOptionsFlag
 			case FourCC.literal("Iloc"):
@@ -350,8 +334,6 @@ extension DSStore {
 				.physicalSizeLegacy
 			case FourCC.literal("phyS"):
 				.physicalSize
-			case FourCC.literal("pict"):
-				.backgroundPicture
 			case FourCC.literal("ptbL"):
 				.trashPutBackLocation
 			case FourCC.literal("ptbN"):
@@ -370,8 +352,6 @@ extension DSStore {
 		*/
 		public var fourCC: FourCC {
 			switch self {
-			case .background:
-				FourCC.literal("BKGD")
 			case .iconViewOptionsFlag:
 				FourCC.literal("ICVO")
 			case .iconLocation:
@@ -436,8 +416,6 @@ extension DSStore {
 				FourCC.literal("phyS")
 			case .physicalSizeLegacy:
 				FourCC.literal("ph1S")
-			case .backgroundPicture:
-				FourCC.literal("pict")
 			case .trashPutBackLocation:
 				FourCC.literal("ptbL")
 			case .trashPutBackName:
@@ -456,8 +434,6 @@ extension DSStore {
 		*/
 		public var displayName: String {
 			switch self {
-			case .background:
-				"Background"
 			case .iconViewOptionsFlag:
 				"Icon View Options Flag"
 			case .iconLocation:
@@ -522,8 +498,6 @@ extension DSStore {
 				"Physical Size"
 			case .physicalSizeLegacy:
 				"Physical Size (Legacy)"
-			case .backgroundPicture:
-				"Background Picture"
 			case .trashPutBackLocation:
 				"Trash Put Back Location"
 			case .trashPutBackName:

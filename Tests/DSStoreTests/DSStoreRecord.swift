@@ -96,28 +96,6 @@ struct DSStoreRecordTests {
 		#expect(record.iconPosition?.y == 20)
 	}
 
-	@Test("Record convenience: backgroundType")
-	func backgroundType() {
-		var data = Data("ClrB".utf8)
-		var red = UInt16(1000).bigEndian
-		var green = UInt16(2000).bigEndian
-		var blue = UInt16(3000).bigEndian
-		data.append(contentsOf: withUnsafeBytes(of: &red) { $0 })
-		data.append(contentsOf: withUnsafeBytes(of: &green) { $0 })
-		data.append(contentsOf: withUnsafeBytes(of: &blue) { $0 })
-		data.append(contentsOf: [0x00, 0x00])
-
-		let record = DSStore.Record(filename: ".", type: .background, value: .data(data))
-
-		if case .color(let resultRed, let resultGreen, let resultBlue) = record.backgroundType {
-			#expect(resultRed == 1000)
-			#expect(resultGreen == 2000)
-			#expect(resultBlue == 3000)
-		} else {
-			Issue.record("Expected color background type")
-		}
-	}
-
 	@Test("Record convenience: windowBounds")
 	func windowBounds() {
 		var data = Data()
