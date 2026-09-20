@@ -601,73 +601,25 @@ extension DSStore {
 		Plist representation for the `icvp` record.
 		*/
 		public var plistValue: PlistValue {
-			var dictionary = [String: PlistValue]()
-
-			if let showIconPreview {
-				dictionary["showIconPreview"] = .bool(showIconPreview)
-			}
-
-			if let showItemInfo {
-				dictionary["showItemInfo"] = .bool(showItemInfo)
-			}
-
-			if let labelOnBottom {
-				dictionary["labelOnBottom"] = .bool(labelOnBottom)
-			}
-
-			if let scrollPositionX {
-				dictionary["scrollPositionX"] = .double(scrollPositionX)
-			}
-
-			if let scrollPositionY {
-				dictionary["scrollPositionY"] = .double(scrollPositionY)
-			}
-
-			if let gridOffsetX {
-				dictionary["gridOffsetX"] = .double(gridOffsetX)
-			}
-
-			if let gridOffsetY {
-				dictionary["gridOffsetY"] = .double(gridOffsetY)
-			}
-
-			if let textSize {
-				dictionary["textSize"] = .int(textSize)
-			}
-
-			if let iconSize {
-				dictionary["iconSize"] = .int(iconSize)
-			}
-
-			if let gridSpacing {
-				dictionary["gridSpacing"] = .double(gridSpacing)
-			}
-
-			if let viewOptionsVersion {
-				dictionary["viewOptionsVersion"] = .int(viewOptionsVersion)
-			}
-
-			if let arrangeBy {
-				dictionary["arrangeBy"] = .string(arrangeBy)
-			}
-
-			if let backgroundType {
-				dictionary["backgroundType"] = .int(backgroundType)
-			}
-
-			if let backgroundColorRed {
-				dictionary["backgroundColorRed"] = .double(backgroundColorRed)
-			}
-
-			if let backgroundColorGreen {
-				dictionary["backgroundColorGreen"] = .double(backgroundColorGreen)
-			}
-
-			if let backgroundColorBlue {
-				dictionary["backgroundColorBlue"] = .double(backgroundColorBlue)
-			}
-
-			return .dictionary(dictionary)
+			// Finder discards the whole dictionary when keys are missing, so every key is always written. Unset ones fall back to the value Finder itself uses.
+			.dictionary([
+				"showIconPreview": .bool(showIconPreview ?? true),
+				"showItemInfo": .bool(showItemInfo ?? false),
+				"labelOnBottom": .bool(labelOnBottom ?? true),
+				"scrollPositionX": .double(scrollPositionX ?? 0),
+				"scrollPositionY": .double(scrollPositionY ?? 0),
+				"gridOffsetX": .double(gridOffsetX ?? 0),
+				"gridOffsetY": .double(gridOffsetY ?? 0),
+				"textSize": .int(textSize ?? 12),
+				"iconSize": .int(iconSize ?? 64),
+				"gridSpacing": .double(gridSpacing ?? 54),
+				"viewOptionsVersion": .int(viewOptionsVersion ?? 1),
+				"arrangeBy": .string(arrangeBy ?? "none"),
+				"backgroundType": .int(backgroundType ?? 0),
+				"backgroundColorRed": .double(backgroundColorRed ?? 1),
+				"backgroundColorGreen": .double(backgroundColorGreen ?? 1),
+				"backgroundColorBlue": .double(backgroundColorBlue ?? 1)
+			])
 		}
 	}
 	// swiftlint:enable discouraged_optional_boolean
