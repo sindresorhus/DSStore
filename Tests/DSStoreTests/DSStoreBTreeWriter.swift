@@ -60,22 +60,69 @@ struct DSStoreBTreeWriterTests {
 		}
 	}
 
-	@Test("Builds tree when records fill most of a page")
-	func buildsTreeWithLargeRecords() throws {
+	@Test("Builds a valid tree with the largest allowed records")
+	func buildsTreeWithLargestAllowedRecords() throws {
 		var store = DSStore()
-		let largeData = Data(repeating: 0x4F, count: 4000)
+		// Each record is 4 + 22 (filename) + 4 (type) + 8 (blob header) + 2002 = 2040 bytes, so exactly two fit in an internal node.
+		let largeData = Data(repeating: 0x4F, count: 2002)
 
-		for index in 0..<3 {
-			let filename = "Large-\(index).bin"
-			store.add(DSStore.Record(filename: filename, type: .iconLocation, value: .data(largeData)))
+		for index in 0..<10 {
+			store.add(DSStore.Record(filename: "Large-\(index).bin", type: .iconLocation, value: .data(largeData)))
 		}
 
 		let data = try store.serialize()
 		let parsed = try BTreeTestParser.parse(data)
-		let records = try BTreeTestParser.readAllRecords(parsed: parsed)
 
-		#expect(parsed.header.recordCount == 3)
-		#expect(records.count == 3)
+		#expect(parsed.header.treeHeight >= 1)
+
+		// The strict reader rejects internal nodes without records.
+		let readStore = try DSStore.read(from: data)
+		#expect(readStore.records.count == 10)
+	}
+
+	@Test("Rejects records larger than half a page")
+	func rejectsRecordsLargerThanHalfPage() {
+		var store = DSStore()
+		store.add(DSStore.Record(filename: "Large-0.bin", type: .iconLocation, value: .data(Data(repeating: 0x4F, count: 2003))))
+
+		#expect(throws: DSStore.Error.self) {
+			_ = try store.serialize()
+		}
+	}
+
+	@Test("Sorts records like Finder")
+	func sortsRecordsLikeFinder() throws {
+		var store = DSStore()
+		for filename in ["ørn", "Z", "a", "_x", "B"] {
+			store.add(DSStore.Record(filename: filename, type: .iconLocation, value: .data(Data(repeating: 0, count: 16))))
+		}
+
+		var diagnostics = [String]()
+		DSStore.diagnosticHandler = { diagnostics.append($0) }
+		defer { DSStore.diagnosticHandler = nil }
+
+		let readStore = try DSStore.read(from: try store.serialize())
+
+		// Finder compares lowercased UTF-16 code units, so `_` sorts before letters and `ø` after `z`.
+		#expect(readStore.records.map(\.filename) == ["_x", "a", "B", "Z", "ørn"])
+		#expect(diagnostics.isEmpty)
+	}
+
+	@Test("Allocator free lists cover the whole address space")
+	func allocatorFreeListsCoverAddressSpace() throws {
+		var store = DSStore()
+		store.add(DSStore.Record(filename: "File.txt", type: .iconLocation, value: .data(Data(repeating: 0, count: 16))))
+
+		let parsed = try BTreeTestParser.parse(try store.serialize())
+		var freeEnd: UInt64 = 0
+		for (power, offsets) in parsed.allocator.freeLists.enumerated() {
+			for offset in offsets {
+				freeEnd = max(freeEnd, UInt64(offset) + (UInt64(1) << UInt64(power)))
+			}
+		}
+
+		// Like Finder, the free lists extend to 2^31, not only to the end of the file.
+		#expect(freeEnd == UInt64(1) << 31)
 	}
 
 	@Test("Node blocks are power-of-two sized and at most a page")

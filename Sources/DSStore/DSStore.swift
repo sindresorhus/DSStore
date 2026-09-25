@@ -12,8 +12,6 @@ public struct DSStore: Sendable {
 	private static let buddyMagic: UInt32 = 0x42756431 // "Bud1"
 	private static let dsdbTableOfContentsName = "DSDB"
 	private static let pageSize: UInt32 = 0x1000
-	private static let filenameSortLocale = Locale(identifier: "en_US_POSIX")
-	private static let filenameSortOptions: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
 	private static let maxBTreeTraversalDepth = 1024
 
 	private final class DiagnosticHandlerStorage: @unchecked Sendable {
@@ -590,13 +588,18 @@ public struct DSStore: Sendable {
 		return Record(filename: filename, type: recordType, value: value)
 	}
 
+	/**
+	Finder orders filenames by their lowercased UTF-16 code units. A locale-aware comparison does not match Finder's order.
+	*/
 	private static func compareFilenames(_ left: String, _ right: String) -> ComparisonResult {
-		left.compare(
-			right,
-			options: filenameSortOptions,
-			range: nil,
-			locale: Self.filenameSortLocale
-		)
+		let left = left.lowercased().utf16
+		let right = right.lowercased().utf16
+
+		if left.elementsEqual(right) {
+			return .orderedSame
+		}
+
+		return left.lexicographicallyPrecedes(right) ? .orderedAscending : .orderedDescending
 	}
 
 	private func readValue(reader: BinaryReader, dataType: FourCC) throws -> Value {
@@ -674,11 +677,13 @@ public struct DSStore: Sendable {
 
 	/**
 	Write the DS_Store to a file at the given URL.
+
+	The write is atomic, so an interrupted write cannot leave a corrupt file. The file is replaced, so if the URL is a symlink, the symlink is replaced instead of followed. This requires write access to the containing directory, not only to the file.
 	*/
 	public func write(to url: URL) throws(Error) {
 		let data = try serialize()
 		do {
-			try data.write(to: url)
+			try data.write(to: url, options: .atomic)
 		} catch {
 			throw Error.writeFailed(error.localizedDescription)
 		}
@@ -791,7 +796,7 @@ public struct DSStore: Sendable {
 			var blocks = allocatedBlocks
 			blocks.append(AllocatedBlock(blockID: 0, offset: allocatorOffset, sizePower: allocatorSizePower))
 
-			let freeLists = try buildFreeLists(allocatedBlocks: blocks, fileEnd: allocatorOffset + allocatorBlockSize)
+			let freeLists = try buildFreeLists(allocatedBlocks: blocks)
 			allocatorData = try buildAllocatorData(
 				allocatedBlocks: blocks,
 				freeLists: freeLists,
@@ -900,6 +905,8 @@ public struct DSStore: Sendable {
 
 		/**
 		Choose a separator that keeps both halves within the page size budget.
+
+		The separator is never the first or last record, so neither half is empty. An internal node without records is invalid.
 		*/
 		func splitIndex(for records: [Data], isLeaf: Bool) throws -> Int {
 			let perRecordOverhead = isLeaf ? 0 : 4
@@ -910,35 +917,27 @@ public struct DSStore: Sendable {
 			}
 			let totalSize = prefix.last ?? 0
 
-			func findIndex(allowEmpty: Bool) -> Int? {
-				var bestIndex: Int?
-				var bestBalance = Int.max
+			var bestIndex: Int?
+			var bestBalance = Int.max
 
-				for index in 0..<records.count {
-					if !allowEmpty, index == 0 || index == records.count - 1 {
-						continue
-					}
-					let leftSize = 8 + prefix[index]
-					let rightSize = 8 + (totalSize - prefix[index + 1])
-					guard leftSize <= pageSize, rightSize <= pageSize else {
-						continue
-					}
-					let balance = abs(leftSize - rightSize)
-					if balance < bestBalance {
-						bestBalance = balance
-						bestIndex = index
-					}
+			for index in records.indices.dropFirst().dropLast() {
+				let leftSize = 8 + prefix[index]
+				let rightSize = 8 + (totalSize - prefix[index + 1])
+				guard leftSize <= pageSize, rightSize <= pageSize else {
+					continue
 				}
-				return bestIndex
+				let balance = abs(leftSize - rightSize)
+				if balance < bestBalance {
+					bestBalance = balance
+					bestIndex = index
+				}
 			}
 
-			if let index = findIndex(allowEmpty: false) {
-				return index
+			guard let bestIndex else {
+				throw Error.writeFailed("Unable to split B-tree node")
 			}
-			if let index = findIndex(allowEmpty: true) {
-				return index
-			}
-			throw Error.writeFailed("Unable to split B-tree node")
+
+			return bestIndex
 		}
 
 		var nextBlockID: UInt32 = 2
@@ -997,7 +996,8 @@ public struct DSStore: Sendable {
 		}
 
 		for record in recordData {
-			if record.count + 8 > pageSize {
+			// A record can be promoted into an internal node, where it also needs a 4-byte child pointer. If any two records fit in a node, a node that overflows has at least three, so it can always be split at a middle record with both halves fitting a page. Finder's own records are much smaller (the largest in 2000 real files was 1008 bytes).
+			if record.count + 4 > (pageSize - 8) / 2 {
 				throw Error.writeFailed("Record exceeds B-tree page size")
 			}
 			if let split = try insertRecord(record, into: root) {
@@ -1160,7 +1160,11 @@ public struct DSStore: Sendable {
 		return writer.data
 	}
 
-	private func buildFreeLists(allocatedBlocks: [AllocatedBlock], fileEnd: UInt32) throws -> [[UInt32]] {
+	/**
+	Finder lists all free space in the 2^31 buddy address space, not just up to the end of the file.
+	*/
+	private func buildFreeLists(allocatedBlocks: [AllocatedBlock]) throws -> [[UInt32]] {
+		let addressSpaceEnd = UInt32(1) << 31
 		struct Range {
 			let offset: UInt32
 			let size: UInt32
@@ -1192,8 +1196,8 @@ public struct DSStore: Sendable {
 			}
 			cursor = range.offset + range.size
 		}
-		if cursor < fileEnd {
-			freeRanges.append(Range(offset: cursor, size: fileEnd - cursor))
+		if cursor < addressSpaceEnd {
+			freeRanges.append(Range(offset: cursor, size: addressSpaceEnd - cursor))
 		}
 
 		var freeLists = Array(repeating: [UInt32](), count: 32)

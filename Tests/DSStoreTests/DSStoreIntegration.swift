@@ -342,4 +342,25 @@ struct DSStoreIntegrationTests {
 			}
 		}
 	}
+
+	@Test("Write replaces the file instead of writing into it")
+	func writeReplacesFile() throws {
+		try TestHelpers.withTempDirectory { directory in
+			// A write that replaces the file is atomic, so an interrupted write cannot leave a corrupt file. It also means a symlink is replaced instead of followed.
+			let targetURL = directory.appending(path: "target")
+			let originalData = Data("original".utf8)
+			try originalData.write(to: targetURL)
+
+			let url = directory.appending(path: ".DS_Store")
+			try FileManager.default.createSymbolicLink(at: url, withDestinationURL: targetURL)
+
+			var store = DSStore()
+			try store.setIconPosition(for: "File.txt", x: 10, y: 20)
+			try store.write(to: url)
+
+			#expect(try Data(contentsOf: targetURL) == originalData)
+			#expect(try url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == false)
+			#expect(try DSStore.read(from: url).iconPosition(for: "File.txt")?.x == 10)
+		}
+	}
 }
