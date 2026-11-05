@@ -114,6 +114,7 @@ struct DSStoreRecordTests {
 	}
 
 	@Test("Record convenience: pathValue")
+	@available(*, deprecated, message: "Tests the deprecated `pathValue`.")
 	func pathValue() {
 		let stringRecord = DSStore.Record(filename: "File.txt", type: .trashPutBackLocation, value: .string("Users/test"))
 		#expect(stringRecord.pathValue == "/Users/test")

@@ -54,13 +54,31 @@ extension DSStore.Record {
 
 	/**
 	Path value when the record stores a file path.
+
+	Deprecated: use `DSStore.putBackURL(for:storeURL:)`. This value is only the directory, and the original filename is in a separate `ptbN` record.
+
+	For a Put Back location (`ptbL`), the path is relative to the root of the volume that holds the `.DS_Store` file. macOS stores it without a leading slash on the boot volume (for example, `Users/sindresorhus/Downloads/`), and with a leading slash on other volumes (for example, `/x/y/` for `/Volumes/External/x/y/`). This adds a leading slash if there is none, so the result is an absolute path only for a `.DS_Store` file on the boot volume. For other volumes, prepend the volume path.
 	*/
+	@available(*, deprecated, renamed: "DSStore.putBackURL(for:storeURL:)")
 	public var pathValue: String? {
+		guard let putBackDirectoryPath else {
+			return nil
+		}
+
+		return putBackDirectoryPath.hasPrefix("/") ? putBackDirectoryPath : "/\(putBackDirectoryPath)"
+	}
+
+	/**
+	Directory a trashed item came from, from the Put Back location (`ptbL`) record.
+
+	Relative to the volume root, exactly as macOS stores it: no leading slash on the boot volume, one on other volumes.
+	*/
+	var putBackDirectoryPath: String? {
 		guard type == .trashPutBackLocation else {
 			return nil
 		}
 
-		let path: String? = switch value {
+		return switch value {
 		case .string(let string):
 			string
 		case .data(let data):
@@ -68,11 +86,21 @@ extension DSStore.Record {
 		default:
 			nil
 		}
+	}
 
-		guard let path else {
+	/**
+	Name a trashed item had before it went to the Trash, from the Put Back name (`ptbN`) record.
+
+	It differs from the name in the Trash when Finder renamed the item to prevent a collision.
+	*/
+	var putBackName: String? {
+		guard
+			type == .trashPutBackName,
+			case .string(let name) = value
+		else {
 			return nil
 		}
 
-		return path.hasPrefix("/") ? path : "/\(path)"
+		return name
 	}
 }

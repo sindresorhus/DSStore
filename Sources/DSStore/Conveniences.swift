@@ -941,6 +941,54 @@ extension DSStore {
 		return ViewSort(fourCC: sort)
 	}
 
+	// MARK: - Trash Put Back Helpers
+
+	/**
+	Returns the original location of an item in the Trash, which Finder uses for “Put Back”.
+
+	Pass the `.DS_Store` file you read the store from. The location is stored relative to the volume root, and the volume is read from that file, so this works for the Trash of any volume.
+
+	The URL includes the original filename, which can differ from `filename` when Finder renamed the item in the Trash.
+
+	Returns `nil` when there is no put back location, and when the volume of `storeURL` cannot be read. It never guesses a volume, as a guess gives a wrong path instead of no path.
+
+	The path comes from the store, which is untrusted input, and is not validated. Check the URL before you move files with it.
+
+	```
+	let storeURL = URL(filePath: "/Users/sindresorhus/.Trash/.DS_Store")
+	let store = try DSStore.read(from: storeURL)
+
+	store.putBackURL(for: "Document 09-41-12-123.txt", storeURL: storeURL)
+	//=> URL(filePath: "/Users/sindresorhus/Downloads/Document.txt")
+	```
+	*/
+	public func putBackURL(for filename: String, storeURL: URL) -> URL? {
+		guard let volumeURL = (try? storeURL.resourceValues(forKeys: [.volumeURLKey]))?.volume else {
+			return nil
+		}
+
+		return putBackURL(for: filename, volumeURL: volumeURL)
+	}
+
+	/**
+	Returns the original location of an item in the Trash, resolved against the root of the given volume.
+
+	Use this only when there is no store file to read the volume from, such as for a store read from `Data`. Otherwise use `putBackURL(for:storeURL:)`, which cannot pick the wrong volume.
+
+	The boot volume root is `/`. Another volume root looks like `/Volumes/External`.
+	*/
+	public func putBackURL(for filename: String, volumeURL: URL) -> URL? {
+		guard let directoryPath = record(for: filename, type: .trashPutBackLocation)?.putBackDirectoryPath else {
+			return nil
+		}
+
+		let originalName = record(for: filename, type: .trashPutBackName)?.putBackName ?? filename
+
+		return volumeURL
+			.appending(path: directoryPath.trimmingPrefix("/"), directoryHint: .isDirectory)
+			.appending(path: originalName)
+	}
+
 	// MARK: - Icon Location Helpers
 
 	/**

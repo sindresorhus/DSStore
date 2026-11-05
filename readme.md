@@ -105,6 +105,36 @@ hdiutil convert scratch.dmg -format UDZO -o MyApp.dmg
 
 If you already have Carbon Alias data for the image, use `setBackgroundPicture(aliasData:)` instead. Finder does not accept bookmark data there, not even data from `URL.bookmarkData(options: .suitableForBookmarkFile, relativeTo:)`.
 
+### Finding where a trashed item came from
+
+The `.DS_Store` file in a Trash folder stores the original location of each item, which Finder uses for “Put Back”. Pass the store file, and the volume is read from it, so the same call works for any volume:
+
+```swift
+import DSStore
+
+let storeURL = URL(filePath: "/Users/sindresorhus/.Trash/.DS_Store")
+let store = try DSStore.read(from: storeURL)
+
+for filename in store.filenames {
+	guard let url = store.putBackURL(for: filename, storeURL: storeURL) else {
+		continue
+	}
+
+	print(filename, "came from", url.path(percentEncoded: false))
+}
+```
+
+The URL includes the original filename, which can differ from the name in the Trash when Finder renamed the item to prevent a collision.
+
+The location is stored relative to the volume root, which is why the store file is needed, and why there is no boot-volume default: a store on another volume would resolve to a wrong path with no sign of trouble.
+
+For a store read from `Data`, pass the volume root yourself:
+
+```swift
+let store = try DSStore.read(from: data)
+let url = store.putBackURL(for: "Document.txt", volumeURL: URL(filePath: "/Volumes/External"))
+```
+
 ### Working with records directly
 
 ```swift

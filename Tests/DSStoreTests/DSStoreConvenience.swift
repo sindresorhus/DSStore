@@ -2,6 +2,8 @@ import Foundation
 import Testing
 @testable import DSStore
 
+private let bootVolumeURL = URL(filePath: "/")
+
 private typealias FourCC = DSStore.FourCC
 private typealias PlistValue = DSStore.PlistValue
 
@@ -461,5 +463,85 @@ struct DSStoreConvenienceTests {
 
 		#expect(store.iconPosition(for: "App.app")?.x == 100)
 		#expect(store.iconPosition(for: "Applications")?.x == 420)
+	}
+
+	@Test("Put back URL uses the put back name and the volume root")
+	func putBackURL() {
+		var store = DSStore()
+		store.add(.init(filename: "Document 09-41-12-123.txt", type: .trashPutBackLocation, value: .string("Users/test/Downloads/")))
+		store.add(.init(filename: "Document 09-41-12-123.txt", type: .trashPutBackName, value: .string("Document.txt")))
+
+		#expect(store.putBackURL(for: "Document 09-41-12-123.txt", volumeURL: bootVolumeURL)?.path(percentEncoded: false) == "/Users/test/Downloads/Document.txt")
+	}
+
+	@Test("Put back URL falls back to the filename without a put back name")
+	func putBackURLWithoutName() {
+		var store = DSStore()
+		store.add(.init(filename: "file.txt", type: .trashPutBackLocation, value: .data(Data("var/tmp/".utf8))))
+
+		#expect(store.putBackURL(for: "file.txt", volumeURL: bootVolumeURL)?.path(percentEncoded: false) == "/var/tmp/file.txt")
+	}
+
+	@Test("Put back URL on a volume other than the boot volume")
+	func putBackURLOnOtherVolume() {
+		var store = DSStore()
+
+		// macOS writes the path with a leading slash on volumes other than the boot volume.
+		store.add(.init(filename: "file.txt", type: .trashPutBackLocation, value: .string("/x/y/")))
+
+		let url = store.putBackURL(for: "file.txt", volumeURL: URL(filePath: "/Volumes/External"))
+		#expect(url?.path(percentEncoded: false) == "/Volumes/External/x/y/file.txt")
+	}
+
+	@Test("Put back URL for an item at the volume root")
+	func putBackURLAtVolumeRoot() {
+		var store = DSStore()
+		store.add(.init(filename: "file.txt", type: .trashPutBackLocation, value: .string("/")))
+
+		let url = store.putBackURL(for: "file.txt", volumeURL: URL(filePath: "/Volumes/External"))
+		#expect(url?.path(percentEncoded: false) == "/Volumes/External/file.txt")
+	}
+
+	@Test("Put back URL keeps special characters in the path")
+	func putBackURLWithSpecialCharacters() {
+		var store = DSStore()
+		store.add(.init(filename: "trashed.txt", type: .trashPutBackLocation, value: .string("Users/a b/50%/")))
+		store.add(.init(filename: "trashed.txt", type: .trashPutBackName, value: .string("100% #1?.txt")))
+
+		#expect(store.putBackURL(for: "trashed.txt", volumeURL: bootVolumeURL)?.path(percentEncoded: false) == "/Users/a b/50%/100% #1?.txt")
+	}
+
+	@Test("Put back URL returns nil for a put back location that is not text")
+	func putBackURLWithNonTextLocation() {
+		var store = DSStore()
+		store.add(.init(filename: "file.txt", type: .trashPutBackLocation, value: .uint32(42)))
+
+		#expect(store.putBackURL(for: "file.txt", volumeURL: bootVolumeURL) == nil)
+	}
+
+	@Test("Put back URL derives the volume from the store file")
+	func putBackURLFromStoreURL() throws {
+		var store = DSStore()
+		store.add(.init(filename: "file.txt", type: .trashPutBackLocation, value: .string("Users/test/")))
+
+		try TestHelpers.withTempFile { storeURL in
+			// The temporary directory is on the boot volume, so the derived root is "/".
+			#expect(store.putBackURL(for: "file.txt", storeURL: storeURL)?.path(percentEncoded: false) == "/Users/test/file.txt")
+		}
+	}
+
+	@Test("Put back URL returns nil when the volume of the store file cannot be read")
+	func putBackURLFromMissingStoreURL() {
+		var store = DSStore()
+		store.add(.init(filename: "file.txt", type: .trashPutBackLocation, value: .string("Users/test/")))
+
+		let storeURL = URL(filePath: "/does-not-exist-\(UUID().uuidString)/.DS_Store")
+		#expect(store.putBackURL(for: "file.txt", storeURL: storeURL) == nil)
+	}
+
+	@Test("Put back URL returns nil without a put back location")
+	func putBackURLMissing() {
+		let store = DSStore()
+		#expect(store.putBackURL(for: "file.txt", volumeURL: bootVolumeURL) == nil)
 	}
 }
